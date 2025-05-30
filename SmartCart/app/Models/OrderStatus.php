@@ -22,7 +22,7 @@ class OrderStatus extends Model
     ];
 
     /**
-     * Get the order that owns the status entry.
+     * Get the order that owns the status.
      */
     public function order()
     {
@@ -30,37 +30,10 @@ class OrderStatus extends Model
     }
 
     /**
-     * Get the user that created the status entry.
+     * Get the user that created the status.
      */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
-
-    /**
-     * Get the status label for display.
-     *
-     * @return string
-     */
-    public function getStatusLabelAttribute()
-    {
-        return ucfirst($this->status);
-    }
-
-    /**
-     * Get the status badge class.
-     *
-     * @return string
-     */
-    public function getStatusBadgeClassAttribute()
-    {
-        return match ($this->status) {
-            'pending' => 'bg-warning',
-            'processing' => 'bg-info',
-            'completed' => 'bg-success',
-            'cancelled' => 'bg-danger',
-            'refunded' => 'bg-secondary',
-            default => 'bg-primary',
-        };
-    }
-} 
+}

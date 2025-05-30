@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Product;
 
 class Category extends Model
 {
@@ -19,6 +20,8 @@ class Category extends Model
         'slug',
         'description',
         'parent_id',
+        'image_path',
+        'status',
     ];
 
     /**
@@ -30,7 +33,7 @@ class Category extends Model
     }
 
     /**
-     * Get the child categories.
+     * Get the subcategories for the category.
      */
     public function children()
     {
@@ -45,46 +48,22 @@ class Category extends Model
         return $this->belongsToMany(Product::class);
     }
 
-    /**
-     * Scope a query to only include parent categories.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopeParents($query)
+    public function getAllProducts()
     {
-        return $query->whereNull('parent_id');
-    }
-
-    /**
-     * Get all ancestors of the category.
-     *
-     * @return \Illuminate\Database\Eloquent\Collection
-     */
-    public function getAncestors()
-    {
-        $ancestors = collect([]);
-        $category = $this->parent;
-
-        while ($category) {
-            $ancestors->push($category);
-            $category = $category->parent;
+        // Get products directly associated with this category
+        $products = $this->products()->get();
+        
+        // Get products from subcategories
+        $childrenIds = $this->children()->pluck('id')->toArray();
+        if (!empty($childrenIds)) {
+            $childrenProducts = Product::whereHas('categories', function($query) use ($childrenIds) {
+                $query->whereIn('categories.id', $childrenIds);
+            })->get();
+            
+            // Merge the collections
+            $products = $products->merge($childrenProducts);
         }
-
-        return $ancestors->reverse();
+        
+        return $products->unique('id');
     }
-
-    /**
-     * Get the breadcrumb for the category.
-     *
-     * @return string
-     */
-    public function getBreadcrumbAttribute()
-    {
-        $breadcrumb = $this->getAncestors()->map(function ($ancestor) {
-            return $ancestor->name;
-        })->implode(' > ');
-
-        return $breadcrumb ? $breadcrumb . ' > ' . $this->name : $this->name;
-    }
-} 
+}

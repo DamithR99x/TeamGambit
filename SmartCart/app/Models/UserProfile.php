@@ -32,23 +32,4 @@ class UserProfile extends Model
     {
         return $this->belongsTo(User::class);
     }
-
-    /**
-     * Get the full address as a string.
-     *
-     * @return string
-     */
-    public function getFullAddressAttribute()
-    {
-        $address = $this->address_line_1;
-        
-        if ($this->address_line_2) {
-            $address .= ', ' . $this->address_line_2;
-        }
-        
-        $address .= ', ' . $this->city . ', ' . $this->state . ' ' . $this->postal_code;
-        $address .= ', ' . $this->country;
-        
-        return $address;
-    }
-} 
+}

@@ -40,7 +40,7 @@ class OrderItem extends Model
     }
 
     /**
-     * Get the product associated with the item.
+     * Get the product for the order item.
      */
     public function product()
     {
@@ -48,32 +48,10 @@ class OrderItem extends Model
     }
 
     /**
-     * Get the subtotal for the item.
-     *
-     * @return float
+     * Calculate the subtotal for this item.
      */
-    public function getSubtotalAttribute()
+    public function getSubtotal()
     {
         return $this->price * $this->quantity;
     }
-
-    /**
-     * Get the formatted price.
-     *
-     * @return string
-     */
-    public function getFormattedPriceAttribute()
-    {
-        return '$' . number_format($this->price, 2);
-    }
-
-    /**
-     * Get the formatted subtotal.
-     *
-     * @return string
-     */
-    public function getFormattedSubtotalAttribute()
-    {
-        return '$' . number_format($this->subtotal, 2);
-    }
-} 
+}

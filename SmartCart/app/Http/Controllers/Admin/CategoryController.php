@@ -3,159 +3,180 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
 use Illuminate\Http\Request;
+use App\Models\Category;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
     /**
-     * Display a listing of the categories.
+     * Create a new controller instance.
      *
-     * @return \Illuminate\View\View
+     * @return void
+     */
+    public function __construct()
+    {
+        // Auth middleware is already applied at the route level
+    }
+
+    /**
+     * Display a listing of the resource.
      */
     public function index()
     {
-        $categories = Category::withCount('products')
-            ->with('parent')
-            ->latest()
+        $categories = Category::with('parent')
+            ->orderBy('parent_id', 'asc')
+            ->orderBy('name', 'asc')
             ->paginate(10);
-        
+            
         return view('admin.categories.index', compact('categories'));
     }
 
     /**
-     * Show the form for creating a new category.
-     *
-     * @return \Illuminate\View\View
+     * Show the form for creating a new resource.
      */
     public function create()
     {
-        $categories = Category::all();
-        
-        return view('admin.categories.create', compact('categories'));
+        $parentCategories = Category::whereNull('parent_id')->orderBy('name')->get();
+        return view('admin.categories.create', compact('parentCategories'));
     }
 
     /**
-     * Store a newly created category in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\RedirectResponse
+     * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:100',
-            'slug' => 'nullable|string|max:100|unique:categories',
+            'name' => 'required|string|max:255|unique:categories',
             'description' => 'nullable|string',
             'parent_id' => 'nullable|exists:categories,id',
+            'status' => 'required|in:active,inactive',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // Create the category
-        Category::create([
+        $data = [
             'name' => $request->name,
-            'slug' => $request->slug ?? Str::slug($request->name),
+            'slug' => Str::slug($request->name),
             'description' => $request->description,
             'parent_id' => $request->parent_id,
-        ]);
+            'status' => $request->status,
+        ];
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            $data['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
+        Category::create($data);
 
         return redirect()->route('admin.categories.index')
             ->with('success', 'Category created successfully.');
     }
 
     /**
-     * Display the specified category.
-     *
-     * @param  \App\Models\Category  $category
-     * @return \Illuminate\View\View
+     * Display the specified resource.
      */
-    public function show(Category $category)
+    public function show(string $id)
     {
-        $category->load(['parent', 'children', 'products']);
-        
+        $category = Category::with('parent', 'children')->findOrFail($id);
         return view('admin.categories.show', compact('category'));
     }
 
     /**
-     * Show the form for editing the specified category.
-     *
-     * @param  \App\Models\Category  $category
-     * @return \Illuminate\View\View
+     * Show the form for editing the specified resource.
      */
-    public function edit(Category $category)
+    public function edit(string $id)
     {
-        $categories = Category::where('id', '!=', $category->id)->get();
-        
-        return view('admin.categories.edit', compact('category', 'categories'));
+        $category = Category::findOrFail($id);
+        $parentCategories = Category::whereNull('parent_id')
+            ->where('id', '!=', $id)
+            ->orderBy('name')
+            ->get();
+            
+        return view('admin.categories.edit', compact('category', 'parentCategories'));
     }
 
     /**
-     * Update the specified category in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Category  $category
-     * @return \Illuminate\Http\RedirectResponse
+     * Update the specified resource in storage.
      */
-    public function update(Request $request, Category $category)
+    public function update(Request $request, string $id)
     {
+        $category = Category::findOrFail($id);
+        
         $request->validate([
-            'name' => 'required|string|max:100',
-            'slug' => ['nullable', 'string', 'max:100', Rule::unique('categories')->ignore($category->id)],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories')->ignore($category->id),
+            ],
             'description' => 'nullable|string',
             'parent_id' => [
                 'nullable',
                 'exists:categories,id',
-                function ($attribute, $value, $fail) use ($category) {
-                    // Prevent creating circular references by setting a category as its own parent
-                    if ($value == $category->id) {
+                function ($attribute, $value, $fail) use ($id) {
+                    if ($value == $id) {
                         $fail('A category cannot be its own parent.');
-                    }
-
-                    // Prevent setting a child category as the parent
-                    if ($value) {
-                        $childIds = $category->children()->pluck('id')->toArray();
-                        if (in_array($value, $childIds)) {
-                            $fail('A child category cannot be set as the parent.');
-                        }
                     }
                 },
             ],
+            'status' => 'required|in:active,inactive',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // Update the category
-        $category->update([
+        $data = [
             'name' => $request->name,
-            'slug' => $request->slug ?? Str::slug($request->name),
+            'slug' => Str::slug($request->name),
             'description' => $request->description,
             'parent_id' => $request->parent_id,
-        ]);
+            'status' => $request->status,
+        ];
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($category->image_path) {
+                Storage::disk('public')->delete($category->image_path);
+            }
+            
+            $data['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
+        $category->update($data);
 
         return redirect()->route('admin.categories.index')
             ->with('success', 'Category updated successfully.');
     }
 
     /**
-     * Remove the specified category from storage.
-     *
-     * @param  \App\Models\Category  $category
-     * @return \Illuminate\Http\RedirectResponse
+     * Remove the specified resource from storage.
      */
-    public function destroy(Category $category)
+    public function destroy(string $id)
     {
+        $category = Category::findOrFail($id);
+        
         // Check if the category has children
-        if ($category->children()->exists()) {
+        if ($category->children()->count() > 0) {
             return redirect()->route('admin.categories.index')
-                ->with('error', 'Cannot delete a category with child categories. Please remove or reassign the child categories first.');
+                ->with('error', 'Cannot delete category with subcategories. Please delete subcategories first.');
         }
-
-        // Detach products from the category (doesn't delete the products)
-        $category->products()->detach();
-
-        // Delete the category
+        
+        // Check if the category has products
+        if ($category->products()->count() > 0) {
+            return redirect()->route('admin.categories.index')
+                ->with('error', 'Cannot delete category with products. Please remove products first or reassign them to another category.');
+        }
+        
+        // Delete image if exists
+        if ($category->image_path) {
+            Storage::disk('public')->delete($category->image_path);
+        }
+        
         $category->delete();
 
         return redirect()->route('admin.categories.index')
             ->with('success', 'Category deleted successfully.');
     }
-} 
+}

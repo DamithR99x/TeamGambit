@@ -67,87 +67,14 @@ class Order extends Model
      */
     public function statusHistory()
     {
-        return $this->hasMany(OrderStatus::class);
+        return $this->hasMany(OrderStatus::class)->orderBy('created_at', 'desc');
     }
 
     /**
-     * Add a status to the order's history.
-     *
-     * @param string $status
-     * @param string|null $comment
-     * @param int|null $userId
-     * @return \App\Models\OrderStatus
+     * Get the latest status for the order.
      */
-    public function addStatus($status, $comment = null, $userId = null)
+    public function latestStatus()
     {
-        // Update the order's current status
-        $this->status = $status;
-        $this->save();
-
-        // Add a new status history entry
-        return $this->statusHistory()->create([
-            'status' => $status,
-            'comment' => $comment,
-            'user_id' => $userId,
-        ]);
+        return $this->hasOne(OrderStatus::class)->latest();
     }
-
-    /**
-     * Get the formatted subtotal.
-     *
-     * @return string
-     */
-    public function getFormattedSubtotalAttribute()
-    {
-        return '$' . number_format($this->subtotal, 2);
-    }
-
-    /**
-     * Get the formatted tax.
-     *
-     * @return string
-     */
-    public function getFormattedTaxAttribute()
-    {
-        return '$' . number_format($this->tax, 2);
-    }
-
-    /**
-     * Get the formatted shipping.
-     *
-     * @return string
-     */
-    public function getFormattedShippingAttribute()
-    {
-        return '$' . number_format($this->shipping, 2);
-    }
-
-    /**
-     * Get the formatted total.
-     *
-     * @return string
-     */
-    public function getFormattedTotalAttribute()
-    {
-        return '$' . number_format($this->total, 2);
-    }
-
-    /**
-     * Get the full address as a string.
-     *
-     * @return string
-     */
-    public function getFullAddressAttribute()
-    {
-        $address = $this->address_line_1;
-        
-        if ($this->address_line_2) {
-            $address .= ', ' . $this->address_line_2;
-        }
-        
-        $address .= ', ' . $this->city . ', ' . $this->state . ' ' . $this->postal_code;
-        $address .= ', ' . $this->country;
-        
-        return $address;
-    }
-} 
+}

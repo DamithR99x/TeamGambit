@@ -3,74 +3,84 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     /**
-     * Display the admin dashboard.
+     * Create a new controller instance.
      *
-     * @return \Illuminate\View\View
+     * @return void
+     */
+    public function __construct()
+    {
+        // Auth middleware is already applied at the route level
+    }
+
+    /**
+     * Show the admin dashboard.
+     *
+     * @return \Illuminate\Http\Response
      */
     public function index()
     {
-        // Get quick statistics
+        // Count total orders
         $totalOrders = Order::count();
-        $totalRevenue = Order::sum('total');
+        
+        // Calculate total revenue
+        $totalRevenue = Order::where('status', '!=', 'cancelled')->sum('total');
+        
+        // Count total customers (users with role 'customer')
         $totalCustomers = User::where('role', 'customer')->count();
+        
+        // Count total products
         $totalProducts = Product::count();
-
+        
         // Get recent orders
-        $recentOrders = Order::with('user')
-            ->orderBy('created_at', 'desc')
+        $recentOrders = Order::latest()->take(10)->get();
+        
+        // Get top selling products
+        $topProducts = DB::table('order_items')
+            ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
+            ->groupBy('product_id')
+            ->orderBy('total_quantity', 'desc')
             ->take(5)
-            ->get();
-
-        // Get low stock products
-        $lowStockProducts = Product::where('stock_quantity', '<', 10)
-            ->where('stock_quantity', '>', 0)
-            ->orderBy('stock_quantity')
-            ->take(5)
-            ->get();
-
-        // Get latest customers
-        $latestCustomers = User::where('role', 'customer')
-            ->orderBy('created_at', 'desc')
-            ->take(5)
-            ->get();
-
-        // Sales by month for chart
-        $salesByMonth = Order::select(
-            DB::raw('SUM(total) as revenue'),
-            DB::raw('MONTH(created_at) as month'),
-            DB::raw('YEAR(created_at) as year')
-        )
-            ->whereYear('created_at', date('Y'))
-            ->groupBy('year', 'month')
-            ->orderBy('year')
-            ->orderBy('month')
             ->get()
             ->map(function ($item) {
-                $monthName = date('F', mktime(0, 0, 0, $item->month, 1));
+                $product = Product::find($item->product_id);
                 return [
-                    'month' => $monthName,
-                    'revenue' => $item->revenue,
+                    'name' => $product ? $product->name : 'Unknown Product',
+                    'quantity' => $item->total_quantity,
                 ];
             });
-
-        return view('admin.dashboard', compact(
+        
+        // Get monthly sales data for the chart
+        $monthlyData = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $month = now()->subMonths($i);
+            $sales = Order::whereYear('created_at', $month->year)
+                ->whereMonth('created_at', $month->month)
+                ->where('status', '!=', 'cancelled')
+                ->sum('total');
+            
+            $monthlyData[] = [
+                'month' => $month->format('M'),
+                'sales' => $sales,
+            ];
+        }
+        
+        return view('admin.dashboard.index', compact(
             'totalOrders',
             'totalRevenue',
             'totalCustomers',
             'totalProducts',
             'recentOrders',
-            'lowStockProducts',
-            'latestCustomers',
-            'salesByMonth'
+            'topProducts',
+            'monthlyData'
         ));
     }
-} 
+}

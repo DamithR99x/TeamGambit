@@ -38,14 +38,6 @@ class Product extends Model
     ];
 
     /**
-     * Get the categories for the product.
-     */
-    public function categories()
-    {
-        return $this->belongsToMany(Category::class);
-    }
-
-    /**
      * Get the images for the product.
      */
     public function images()
@@ -62,133 +54,45 @@ class Product extends Model
     }
 
     /**
-     * Get the users who favorited the product.
+     * Get the categories for the product.
+     */
+    public function categories()
+    {
+        return $this->belongsToMany(Category::class);
+    }
+
+    /**
+     * Get the users who favorited this product.
      */
     public function favoritedBy()
     {
-        return $this->belongsToMany(User::class, 'favorites')
-            ->withTimestamps();
+        return $this->hasMany(Favorite::class);
     }
 
     /**
-     * Get the orders that include this product.
+     * Check if product is in stock.
      */
-    public function orders()
-    {
-        return $this->hasMany(OrderItem::class);
-    }
-
-    /**
-     * Scope a query to only include active products.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopeActive($query)
-    {
-        return $query->where('status', 'active');
-    }
-
-    /**
-     * Scope a query to only include featured products.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopeFeatured($query)
-    {
-        return $query->where('featured', true);
-    }
-
-    /**
-     * Scope a query to only include products in a specific category.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query
-     * @param  int  $categoryId
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopeInCategory($query, $categoryId)
-    {
-        return $query->whereHas('categories', function($q) use ($categoryId) {
-            $q->where('categories.id', $categoryId);
-        });
-    }
-
-    /**
-     * Get the effective price (discount_price if set, otherwise regular price).
-     *
-     * @return float
-     */
-    public function getEffectivePriceAttribute()
-    {
-        return $this->discount_price ?? $this->price;
-    }
-
-    /**
-     * Check if the product is on sale.
-     *
-     * @return bool
-     */
-    public function getIsOnSaleAttribute()
-    {
-        return !is_null($this->discount_price);
-    }
-
-    /**
-     * Get the discount percentage.
-     *
-     * @return int|null
-     */
-    public function getDiscountPercentageAttribute()
-    {
-        if (!$this->is_on_sale) {
-            return null;
-        }
-
-        return round((($this->price - $this->discount_price) / $this->price) * 100);
-    }
-
-    /**
-     * Get the formatted price.
-     *
-     * @return string
-     */
-    public function getFormattedPriceAttribute()
-    {
-        return '$' . number_format($this->price, 2);
-    }
-
-    /**
-     * Get the formatted discount price.
-     *
-     * @return string|null
-     */
-    public function getFormattedDiscountPriceAttribute()
-    {
-        if (!$this->is_on_sale) {
-            return null;
-        }
-
-        return '$' . number_format($this->discount_price, 2);
-    }
-
-    /**
-     * Check if the product is in stock.
-     *
-     * @return bool
-     */
-    public function getInStockAttribute()
+    public function inStock()
     {
         return $this->stock_quantity > 0;
     }
 
     /**
-     * Check if the product is low on stock.
-     *
-     * @return bool
+     * Get current price (discount price if available, otherwise regular price).
      */
-    public function getLowStockAttribute()
+    public function getCurrentPrice()
     {
-        return $this->stock_quantity > 0 && $this->stock_quantity < 10;
+        return $this->discount_price ?? $this->price;
     }
-} 
+
+    /**
+     * Get the primary image for the product.
+     *
+     * @return \App\Models\ProductImage|null
+     */
+    public function getPrimaryImageAttribute()
+    {
+        return $this->images()->where('is_primary', true)->first() 
+            ?? $this->images()->first();
+    }
+}

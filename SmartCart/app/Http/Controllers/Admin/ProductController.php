@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Category;
-use App\Models\Product;
-use App\Models\ProductImage;
 use Illuminate\Http\Request;
+use App\Models\Product;
+use App\Models\Category;
+use App\Models\ProductImage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -14,55 +14,54 @@ use Illuminate\Validation\Rule;
 class ProductController extends Controller
 {
     /**
-     * Display a listing of the products.
+     * Create a new controller instance.
      *
-     * @return \Illuminate\View\View
+     * @return void
+     */
+    public function __construct()
+    {
+        // Auth middleware is already applied at the route level
+    }
+
+    /**
+     * Display a listing of the resource.
      */
     public function index()
     {
-        $products = Product::with(['categories', 'images' => function ($query) {
-            $query->where('is_primary', true);
-        }])->latest()->paginate(10);
-
+        $products = Product::with('categories', 'primaryImage')->latest()->paginate(10);
         return view('admin.products.index', compact('products'));
     }
 
     /**
-     * Show the form for creating a new product.
-     *
-     * @return \Illuminate\View\View
+     * Show the form for creating a new resource.
      */
     public function create()
     {
         $categories = Category::all();
-        
         return view('admin.products.create', compact('categories'));
     }
 
     /**
-     * Store a newly created product in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\RedirectResponse
+     * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'required|string',
             'price' => 'required|numeric|min:0',
-            'discount_price' => 'nullable|numeric|min:0',
+            'discount_price' => 'nullable|numeric|min:0|lt:price',
             'stock_quantity' => 'required|integer|min:0',
-            'sku' => 'nullable|string|max:100|unique:products',
-            'status' => 'required|in:active,inactive,draft',
-            'featured' => 'boolean',
+            'sku' => 'required|string|max:100|unique:products',
             'categories' => 'required|array|min:1',
             'categories.*' => 'exists:categories,id',
+            'status' => 'required|in:active,inactive',
+            'featured' => 'boolean',
             'images' => 'nullable|array',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // Create the product
+        // Create product
         $product = Product::create([
             'name' => $request->name,
             'slug' => Str::slug($request->name),
@@ -71,27 +70,27 @@ class ProductController extends Controller
             'discount_price' => $request->discount_price,
             'stock_quantity' => $request->stock_quantity,
             'sku' => $request->sku,
+            'featured' => $request->featured ? true : false,
             'status' => $request->status,
-            'featured' => $request->featured ?? false,
         ]);
 
         // Attach categories
         $product->categories()->attach($request->categories);
 
-        // Handle images
+        // Handle image uploads
         if ($request->hasFile('images')) {
-            $isPrimary = true; // First image is primary
+            $isPrimary = true; // First image will be primary
             
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('products', 'public');
+            foreach ($request->file('images') as $imageFile) {
+                $path = $imageFile->store('products', 'public');
                 
-                $product->images()->create([
+                ProductImage::create([
+                    'product_id' => $product->id,
                     'image_path' => $path,
                     'is_primary' => $isPrimary,
-                    'sort_order' => 0,
                 ]);
                 
-                $isPrimary = false; // Set subsequent images as non-primary
+                $isPrimary = false; // Only the first image is primary
             }
         }
 
@@ -100,57 +99,52 @@ class ProductController extends Controller
     }
 
     /**
-     * Display the specified product.
-     *
-     * @param  \App\Models\Product  $product
-     * @return \Illuminate\View\View
+     * Display the specified resource.
      */
-    public function show(Product $product)
+    public function show(string $id)
     {
-        $product->load(['categories', 'images']);
-        
+        $product = Product::with('categories', 'images')->findOrFail($id);
         return view('admin.products.show', compact('product'));
     }
 
     /**
-     * Show the form for editing the specified product.
-     *
-     * @param  \App\Models\Product  $product
-     * @return \Illuminate\View\View
+     * Show the form for editing the specified resource.
      */
-    public function edit(Product $product)
+    public function edit(string $id)
     {
+        $product = Product::with('categories', 'images')->findOrFail($id);
         $categories = Category::all();
-        $product->load(['categories', 'images']);
-        
         return view('admin.products.edit', compact('product', 'categories'));
     }
 
     /**
-     * Update the specified product in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Product  $product
-     * @return \Illuminate\Http\RedirectResponse
+     * Update the specified resource in storage.
      */
-    public function update(Request $request, Product $product)
+    public function update(Request $request, string $id)
     {
+        $product = Product::findOrFail($id);
+        
         $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'required|string',
             'price' => 'required|numeric|min:0',
-            'discount_price' => 'nullable|numeric|min:0',
+            'discount_price' => 'nullable|numeric|min:0|lt:price',
             'stock_quantity' => 'required|integer|min:0',
-            'sku' => ['nullable', 'string', 'max:100', Rule::unique('products')->ignore($product->id)],
-            'status' => 'required|in:active,inactive,draft',
-            'featured' => 'boolean',
+            'sku' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('products')->ignore($product->id),
+            ],
             'categories' => 'required|array|min:1',
             'categories.*' => 'exists:categories,id',
+            'status' => 'required|in:active,inactive',
+            'featured' => 'boolean',
             'images' => 'nullable|array',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        // Update the product
+        // Update product
         $product->update([
             'name' => $request->name,
             'slug' => Str::slug($request->name),
@@ -159,27 +153,27 @@ class ProductController extends Controller
             'discount_price' => $request->discount_price,
             'stock_quantity' => $request->stock_quantity,
             'sku' => $request->sku,
+            'featured' => $request->featured ? true : false,
             'status' => $request->status,
-            'featured' => $request->featured ?? false,
         ]);
 
         // Sync categories
         $product->categories()->sync($request->categories);
 
-        // Handle new images
+        // Handle image uploads
         if ($request->hasFile('images')) {
-            $hasExistingImages = $product->images()->exists();
+            $hasPrimary = $product->images()->where('is_primary', true)->exists();
             
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('products', 'public');
+            foreach ($request->file('images') as $imageFile) {
+                $path = $imageFile->store('products', 'public');
                 
-                $product->images()->create([
+                ProductImage::create([
+                    'product_id' => $product->id,
                     'image_path' => $path,
-                    'is_primary' => !$hasExistingImages, // First image is primary only if no existing images
-                    'sort_order' => $product->images()->max('sort_order') + 1,
+                    'is_primary' => !$hasPrimary,
                 ]);
                 
-                $hasExistingImages = true; // Mark that we now have images
+                $hasPrimary = true; // Set after first image
             }
         }
 
@@ -188,83 +182,50 @@ class ProductController extends Controller
     }
 
     /**
-     * Remove the specified product from storage.
-     *
-     * @param  \App\Models\Product  $product
-     * @return \Illuminate\Http\RedirectResponse
+     * Remove the specified resource from storage.
      */
-    public function destroy(Product $product)
+    public function destroy(string $id)
     {
-        // Delete associated images from storage
+        $product = Product::findOrFail($id);
+        
+        // Delete product images from storage
         foreach ($product->images as $image) {
             Storage::disk('public')->delete($image->image_path);
         }
         
-        // Delete the product (will cascade delete images through relationship)
+        // Delete product and related data
         $product->delete();
-        
+
         return redirect()->route('admin.products.index')
             ->with('success', 'Product deleted successfully.');
     }
-
+    
     /**
-     * Set an image as the primary image for a product.
-     *
-     * @param  \App\Models\Product  $product
-     * @param  \App\Models\ProductImage  $image
-     * @return \Illuminate\Http\RedirectResponse
+     * Delete a product image.
      */
-    public function setPrimaryImage(Product $product, ProductImage $image)
+    public function destroyImage(string $id)
     {
-        // Make sure the image belongs to the product
-        if ($image->product_id !== $product->id) {
-            return redirect()->route('admin.products.edit', $product)
-                ->with('error', 'The image does not belong to this product.');
-        }
+        $image = ProductImage::findOrFail($id);
+        $productId = $image->product_id;
         
-        // Remove primary flag from all other images
-        $product->images()->update(['is_primary' => false]);
-        
-        // Set this image as primary
-        $image->update(['is_primary' => true]);
-        
-        return redirect()->route('admin.products.edit', $product)
-            ->with('success', 'Primary image updated successfully.');
-    }
-
-    /**
-     * Remove an image from a product.
-     *
-     * @param  \App\Models\Product  $product
-     * @param  \App\Models\ProductImage  $image
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function deleteImage(Product $product, ProductImage $image)
-    {
-        // Make sure the image belongs to the product
-        if ($image->product_id !== $product->id) {
-            return redirect()->route('admin.products.edit', $product)
-                ->with('error', 'The image does not belong to this product.');
-        }
-        
-        // Check if this is the primary image
-        $isPrimary = $image->is_primary;
-        
-        // Delete the image from storage
+        // Delete image from storage
         Storage::disk('public')->delete($image->image_path);
         
-        // Delete the image record
-        $image->delete();
-        
-        // If we deleted the primary image, make another image primary
-        if ($isPrimary) {
-            $newPrimaryImage = $product->images()->first();
-            if ($newPrimaryImage) {
-                $newPrimaryImage->update(['is_primary' => true]);
+        // If it was a primary image, set another image as primary
+        if ($image->is_primary) {
+            $otherImage = ProductImage::where('product_id', $productId)
+                ->where('id', '!=', $id)
+                ->first();
+                
+            if ($otherImage) {
+                $otherImage->update(['is_primary' => true]);
             }
         }
         
-        return redirect()->route('admin.products.edit', $product)
-            ->with('success', 'Image deleted successfully.');
+        // Delete image record
+        $image->delete();
+        
+        return redirect()->route('admin.products.edit', $productId)
+            ->with('success', 'Product image deleted successfully.');
     }
-} 
+}

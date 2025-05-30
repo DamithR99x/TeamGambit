@@ -37,25 +37,4 @@ class ProductImage extends Model
     {
         return $this->belongsTo(Product::class);
     }
-
-    /**
-     * Scope a query to only include primary images.
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    public function scopePrimary($query)
-    {
-        return $query->where('is_primary', true);
-    }
-
-    /**
-     * Get the full URL for the image.
-     *
-     * @return string
-     */
-    public function getUrlAttribute()
-    {
-        return asset('storage/' . $this->image_path);
-    }
-} 
+}
