@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smartcart-app
+    restart: unless-stopped
+    working_dir: /var/www/
+    volumes:
+      - ./:/var/www
+    networks:
+      - smartcart
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=smartcart
+      - DB_USERNAME=root
+      - DB_PASSWORD=root
+
+  web:
+    image: nginx:alpine
+    container_name: smartcart-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - smartcart
+    depends_on:
+      - app
+
+  mysql:
+    image: mysql:8.0
+    container_name: smartcart-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: smartcart
+      MYSQL_ROOT_PASSWORD: root
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - smartcart
+    command: --default-authentication-plugin=mysql_native_password
+
+  redis:
+    image: redis:alpine
+    container_name: smartcart-redis
+    restart: unless-stopped
+    networks:
+      - smartcart
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: smartcart-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - smartcart
+
+networks:
+  smartcart:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local 
