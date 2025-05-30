@@ -1,0 +1,61 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class ProductImage extends Model
+{
+    use HasFactory;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'product_id',
+        'image_path',
+        'is_primary',
+        'sort_order',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'is_primary' => 'boolean',
+    ];
+
+    /**
+     * Get the product that owns the image.
+     */
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Scope a query to only include primary images.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopePrimary($query)
+    {
+        return $query->where('is_primary', true);
+    }
+
+    /**
+     * Get the full URL for the image.
+     *
+     * @return string
+     */
+    public function getUrlAttribute()
+    {
+        return asset('storage/' . $this->image_path);
+    }
+} 
