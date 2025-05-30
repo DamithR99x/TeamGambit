@@ -7,6 +7,7 @@ Welcome to the SmartCart documentation. This guide provides comprehensive inform
 - [Introduction](./introduction.md) - Overview of SmartCart
 - [Getting Started](./getting-started.md) - Installation and setup instructions
 - [Architecture](./architecture.md) - System architecture and components
+  - [Architecture Diagrams](./architecture-diagrams.md) - Visual diagrams of the system architecture
 - [Features](./features.md) - Detailed feature documentation
 - [User Guide](./user-guide.md) - Guide for end-users
 - [Admin Guide](./admin-guide.md) - Guide for administrators
